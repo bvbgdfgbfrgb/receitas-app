@@ -272,6 +272,10 @@
 </div>
 
 <script>
+    // Configuração da API Gemini
+    const GEMINI_API_KEY = 'AIzaSyAvZMAZXiEY5zc3qKT-e3ahBzRsjVmCqlk'; // SUBSTITUI PELA TUA CHAVE
+    const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+
     async function extractRecipe() {
         const url = document.getElementById('urlInput').value.trim();
         
@@ -296,20 +300,68 @@
         btn.disabled = true;
 
         try {
-            // Since we can't use Gemini API directly due to CORS, we'll simulate the extraction
-            // In a real implementation, this would need a backend proxy
-            const result = await simulateRecipeExtraction(url);
+            // Tentar usar a API real do Gemini
+            const result = await extractWithGeminiAPI(url);
             showResult(result);
             
         } catch (error) {
-            console.error('Error:', error);
-            showError('Erro ao extrair receita. Tente novamente ou use uma URL diferente.');
+            console.error('Erro API Gemini:', error);
+            // Fallback para simulação se API falhar
+            const result = await simulateRecipeExtraction(url);
+            showResult(result);
+            showError('⚠️ Usando modo de demonstração. Configure a API Gemini para funcionalidade completa.');
         } finally {
             // Reset button state
             btnText.style.display = 'inline';
             loading.style.display = 'none';
             btn.disabled = false;
         }
+    }
+
+    async function extractWithGeminiAPI(url) {
+        const prompt = `
+            Analisa este URL e extrai APENAS a informação da receita: ${url}
+            
+            Por favor, retorna a receita no seguinte formato limpo:
+            
+            TÍTULO: [Nome da receita]
+            
+            INGREDIENTES:
+            - [ingrediente 1 com quantidade]
+            - [ingrediente 2 com quantidade]
+            - [etc...]
+            
+            INSTRUÇÕES:
+            1. [passo 1]
+            2. [passo 2]
+            3. [etc...]
+            
+            TEMPO DE PREPARO: [X minutos]
+            PORÇÕES: [X pessoas]
+            
+            Se não conseguires extrair a receita, diz apenas "Não foi possível extrair receita desta URL".
+        `;
+
+        const response = await fetch(GEMINI_API_URL + '?key=' + GEMINI_API_KEY, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{
+                        text: prompt
+                    }]
+                }]
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`API Error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.candidates[0].content.parts[0].text;
     }
 
     async function simulateRecipeExtraction(url) {
@@ -320,12 +372,10 @@
         const domain = extractDomain(url);
         
         const sampleRecipes = {
-            'youtube.com': `RECEITA EXTRAÍDA DE YOUTUBE
+            'youtube.com': `TÍTULO: Bacalhau à Brás Tradicional
 ```
 
-Título: Bacalhau à Brás Tradicional
-
-Ingredientes:
+INGREDIENTES:
 
 - 400g de bacalhau desfiado
 - 500g de batata palha
@@ -337,7 +387,7 @@ Ingredientes:
 - Azeitonas pretas
 - Pimenta a gosto
 
-Instruções:
+INSTRUÇÕES:
 
 1. Numa frigideira, aqueça o azeite e refogue a cebola e o alho até ficarem dourados.
 1. Adicione o bacalhau desfiado e deixe refogar por alguns minutos.
@@ -347,16 +397,14 @@ Instruções:
 1. Finalize com salsa picada e azeitonas.
 1. Sirva imediatamente.
 
-Tempo de preparo: 25 minutos
-Porções: 4 pessoas`,
+TEMPO DE PREPARO: 25 minutos
+PORÇÕES: 4 pessoas`,
 
 ```
-            'instagram.com': `RECEITA EXTRAÍDA DO INSTAGRAM
+            'instagram.com': `TÍTULO: Pastéis de Nata Caseiros
 ```
 
-Título: Pastéis de Nata Caseiros
-
-Ingredientes:
+INGREDIENTES:
 
 - 1 rolo de massa folhada
 - 500ml de nata
@@ -366,7 +414,7 @@ Ingredientes:
 - Canela em pó
 - Raspa de limão
 
-Instruções:
+INSTRUÇÕES:
 
 1. Pré-aqueça o forno a 250°C.
 1. Corte a massa folhada em círculos e forre as formas.
@@ -377,16 +425,14 @@ Instruções:
 1. Asse por 15-20 minutos até dourar.
 1. Polvilhe com canela antes de servir.
 
-Tempo: 30 minutos
-Rende: 12 pastéis`,
+TEMPO DE PREPARO: 30 minutos
+PORÇÕES: 12 pastéis`,
 
 ```
-            'tiktok.com': `RECEITA EXTRAÍDA DO TIKTOK
+            'tiktok.com': `TÍTULO: Francesinha Rápida
 ```
 
-Título: Francesinha Rápida
-
-Ingredientes:
+INGREDIENTES:
 
 - 2 fatias de pão
 - 100g de fiambre
@@ -403,7 +449,7 @@ Para o molho:
 - Mostarda
 - Ketchup
 
-Instruções:
+INSTRUÇÕES:
 
 1. Grelhe o bife e a linguiça.
 1. Monte a sanduíche: pão, fiambre, linguiça, bife.
@@ -413,15 +459,14 @@ Instruções:
 1. Leve ao forno até o queijo derreter.
 1. Sirva com ovo estrelado por cima.
 
-Tempo: 20 minutos`,
+TEMPO DE PREPARO: 20 minutos
+PORÇÕES: 1 pessoa`,
 
 ```
-            'default': `RECEITA EXTRAÍDA DE BLOG CULINÁRIO
+            'default': `TÍTULO: Caldo Verde Tradicional
 ```
 
-Título: Caldo Verde Tradicional
-
-Ingredientes:
+INGREDIENTES:
 
 - 300g de chouriço
 - 500g de batatas
@@ -431,7 +476,7 @@ Ingredientes:
 - Azeite
 - Sal e pimenta
 
-Instruções:
+INSTRUÇÕES:
 
 1. Descasque e corte as batatas em pedaços.
 1. Numa panela, refogue a cebola e o alho no azeite.
@@ -444,8 +489,8 @@ Instruções:
 1. Tempere com sal e pimenta.
 1. Sirva bem quente com um fio de azeite.
 
-Tempo de preparo: 35 minutos
-Porções: 6 pessoas`
+TEMPO DE PREPARO: 35 minutos
+PORÇÕES: 6 pessoas`
 };
 
 ```
